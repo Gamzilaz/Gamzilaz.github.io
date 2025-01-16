@@ -3,297 +3,258 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Галактика с интерфейсом управления</title>
+    <title>3D-шары с орбитами и танцем</title>
     <style>
         body { margin: 0; overflow: hidden; }
         canvas { display: block; }
-        .button-container {
-            position: absolute;
+        .ui-panel {
+            position: fixed;
             top: 10px;
             left: 10px;
-            z-index: 100;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+            color: white;
         }
         .button {
+            background-color: #444;
+            color: white;
             padding: 10px;
             margin: 5px;
-            background-color: #4CAF50;
-            color: white;
             border: none;
             cursor: pointer;
-            border-radius: 5px;
         }
-        .button:hover {
-            background-color: #45a049;
+        .slider {
+            width: 200px;
         }
     </style>
 </head>
 <body>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.9/dat.gui.min.js"></script>
     <script>
+        // Сцена, камеры и рендерер
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const orbitCamera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000); // Камера для вращения вокруг звезды
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
 
+        // Камера на старте
+        camera.position.set(10, 10, 10);
+        camera.lookAt(new THREE.Vector3(0, 0, 0));
+
+        // Камера для вращения
+        orbitCamera.position.set(10, 10, 10);
+        orbitCamera.lookAt(new THREE.Vector3(0, 0, 0));
+
+        // Управление камерой с помощью мыши
         const controls = new THREE.OrbitControls(camera, renderer.domElement);
-        camera.position.set(30, 20, 20);
-        controls.update();
 
-        // Параметры галактики
-        const galaxyParams = {
-            count: 70000,
-            arms: 1,
-            radius: 24,
-            spread: 1.8,
-            size: 0.01,
-            colorRandomness: 1, // Случайность цвета точек
-            rotationSpeed: 0.0005, // Скорость вращения галактики
-        };
+        // Освещение
+        const ambientLight = new THREE.AmbientLight(0x202020, 1); // Мягкое фоновое освещение
+        scene.add(ambientLight);
 
-        let galaxy;
-        const generateGalaxy = () => {
-            if (galaxy) scene.remove(galaxy);
+        // Создаем точечный источник света (для звезды)
+        const starLight = new THREE.PointLight(0xfffec1, 7, 50);  // Желтая точечная лампа
+        starLight.position.set(0, 0, 0);  // Звезда в центре
+        scene.add(starLight);
 
-            const galaxyGeometry = new THREE.BufferGeometry();
-            const galaxyPositions = [];
-            const galaxyColors = [];
+        // Геометрия большого и малого шаров
+        const largeSphereGeometry = new THREE.SphereGeometry(2, 64, 64);
+        const smallSphereGeometry = new THREE.SphereGeometry(0.3, 32, 32); // Маленькие шары
 
-            for (let i = 0; i < galaxyParams.count; i++) {
-                const radius = Math.pow(Math.random(), 3) * galaxyParams.radius;
-                const angle = radius * galaxyParams.arms + Math.random() * 3;
-                const spreadFactor = (galaxyParams.spread - radius / galaxyParams.radius) * 2;
-                const offsetX = (Math.random() - 0.5) * spreadFactor;
-                const offsetY = (Math.random() - 0.5) * spreadFactor;
-                const offsetZ = (Math.random() - 0.5) * spreadFactor;
+        // Материал для большого шара (с эффектом свечения)
+        const largeSphereMaterial = new THREE.MeshStandardMaterial({
+            color: 0xffff00, // Цвет материала (жёлтый)
+            metalness: 0.0,
+            roughness: 0.5,
+            emissive: 0xffff00,  // Эмиссия (яркое свечение)
+            emissiveIntensity: 1.5
+        });
 
-                const x = Math.cos(angle) * radius + offsetX;
-                const y = offsetY;
-                const z = Math.sin(angle) * radius + offsetZ;
+        // Материал для маленьких спутников (с загрузкой текстуры)
+        const textureLoader = new THREE.TextureLoader();
+        const texture = textureLoader.load('https://i.postimg.cc/3JK2y59M/Earth-Diffuse-6-K-2.jpg'); // Замените на путь к вашей текстуре
+        const materialWithTexture = new THREE.MeshStandardMaterial({
+            map: texture,
+            metalness: 1,    // Металличность
+            roughness: 2,    // Шероховатость
+            emissive: 0x111921,
+        });
 
-                galaxyPositions.push(x, y, z);
+        // Меш большого шара (светящейся звезды)
+        const largeSphere = new THREE.Mesh(largeSphereGeometry, largeSphereMaterial);
+        scene.add(largeSphere);
 
-                // Цвет с учетом случайности
-                const colorFactor = 1 - radius / galaxyParams.radius;
-                galaxyColors.push(
-                    colorFactor + (Math.random() - 0.5) * galaxyParams.colorRandomness,
-                    colorFactor * 0.5 + 0.5 + (Math.random() - 0.5) * galaxyParams.colorRandomness,
-                    1
-                );
-            }
+        // Меш для маленьких спутников с текстурой
+        const smallSphere = new THREE.Mesh(smallSphereGeometry, materialWithTexture);
+        scene.add(smallSphere);
 
-            galaxyGeometry.setAttribute('position', new THREE.Float32BufferAttribute(galaxyPositions, 3));
-            galaxyGeometry.setAttribute('color', new THREE.Float32BufferAttribute(galaxyColors, 3));
+        const secondSmallSphere = new THREE.Mesh(smallSphereGeometry, materialWithTexture);
+        scene.add(secondSmallSphere);
 
-            const galaxyMaterial = new THREE.PointsMaterial({
-                size: galaxyParams.size,
-                vertexColors: true,
-            });
+        const thirdSmallSphere = new THREE.Mesh(smallSphereGeometry, materialWithTexture);
+        scene.add(thirdSmallSphere);
 
-            galaxy = new THREE.Points(galaxyGeometry, galaxyMaterial);
-            scene.add(galaxy);
-        };
-
-        generateGalaxy();
-
-        const starCount = 5000;
+        // Создаем звездное небо (точки)
+        const starCount = 2000;
         const starGeometry = new THREE.BufferGeometry();
-        const starPositions = [];
-        const starColors = [];
+        const positions = [];
+        const colors = [];
 
         for (let i = 0; i < starCount; i++) {
-            const x = Math.random() * 200 - 100;
-            const y = Math.random() * 200 - 100;
-            const z = Math.random() * 200 - 100;
-            starPositions.push(x, y, z);
-
-            starColors.push(Math.random(), Math.random(), Math.random());
+            const x = Math.random() * 2000 - 1000;
+            const y = Math.random() * 2000 - 1000;
+            const z = Math.random() * 2000 - 1000;
+            positions.push(x, y, z);
+            colors.push(Math.random(), Math.random(), Math.random());
         }
 
-        starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starPositions, 3));
-        starGeometry.setAttribute('color', new THREE.Float32BufferAttribute(starColors, 3));
+        starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+        starGeometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
 
         const starMaterial = new THREE.PointsMaterial({
-            size: 0.2,
-            vertexColors: true,
+            size: 2,
+            vertexColors: true
         });
 
         const stars = new THREE.Points(starGeometry, starMaterial);
         scene.add(stars);
 
-        // Слежение за точками
-        let selectedPoint = null;
+        // Устанавливаем радиусы орбит для спутников
+        const orbitRadius = 5;
+        const secondOrbitRadius = 7;
+        const thirdOrbitRadius = 9;
+        const ellipticOrbitRadiusX = 6;  // Эллиптическая орбита по оси X
+        const ellipticOrbitRadiusY = 12;  // Эллиптическая орбита по оси Y
 
-        function onMouseClick(event) {
-            const raycaster = new THREE.Raycaster();
-            const mouse = new THREE.Vector2();
+        // Разные скорости вращения спутников
+        const secondOrbitSpeed = 2 * Math.PI / 29; // Второй спутник: один оборот за 15 секунд
+        const thirdOrbitSpeed = 2 * Math.PI / 24; // Третий спутник: один оборот за 20 секунд
+        const ellipticOrbitSpeed = 2 * Math.PI / 20; // Спутник на эллиптической орбите: один оборот за 25 секунд
+        const orbitSpeed = 2 * Math.PI / 15;  // Малый спутник вращается за 10 секунд
 
-            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-
-            raycaster.updateMatrixWorld();
-            raycaster.setFromCamera(mouse, camera);
-
-            const intersects = raycaster.intersectObject(galaxy);
-
-            if (intersects.length > 0) {
-                selectedPoint = intersects[0].point;
-                camera.position.set(selectedPoint.x, selectedPoint.y, selectedPoint.z + 10);
-                controls.target.set(selectedPoint.x, selectedPoint.y, selectedPoint.z);
-            } else {
-                selectedPoint = null;
-                camera.position.set(30, 20, 20);
-                controls.target.set(0, 0, 0);
-            }
+        // Функция для создания орбит (кольца)
+        function createOrbit(radiusX, radiusY, segments) {
+            const orbitGeometry = new THREE.RingGeometry(radiusX - 0.025, radiusX + 0.025, segments);
+            const orbitMaterial = new THREE.MeshBasicMaterial({
+                color: 0xffffff,
+                side: THREE.DoubleSide,
+                opacity: 0.1,  // Прозрачность 10%
+                transparent: true, // Включение прозрачности
+                depthWrite: false // Отключение глубины для правильного отображения колец
+            });
+            const orbit = new THREE.Mesh(orbitGeometry, orbitMaterial);
+            orbit.rotation.x = Math.PI / 2; // Поворачиваем орбиту, чтобы она была горизонтальной
+            scene.add(orbit);
+            return orbit;
         }
 
-        window.addEventListener('click', onMouseClick);
-
-        // Добавление космических кораблей
-        const spaceshipMaterial = new THREE.MeshBasicMaterial({ color: 0xfff600 });
-        const spaceshipSize = 0.2;
-        let spaceships = [];
-        let trails = [];
-
-        const randomPositionInGalaxy = () => {
-            const radius = Math.random() * galaxyParams.radius;
-            const angle = Math.random() * Math.PI * 2;
-            const x = Math.cos(angle) * radius;
-            const y = Math.random() * galaxyParams.spread - galaxyParams.spread / 2;
-            const z = Math.sin(angle) * radius;
-            return { x, y, z };
-        };
-
-        const createSpaceship = () => {
-            // Начальная позиция (случайная точка в галактике)
-            const start = randomPositionInGalaxy();
-
-            // Конечная позиция (другая случайная точка в галактике)
-            let end = randomPositionInGalaxy();
-            while (start.x === end.x && start.y === end.y && start.z === end.z) {
-                end = randomPositionInGalaxy();
+        // Функция для создания эллиптической орбиты
+        function createEllipticOrbit(radiusX, radiusY, segments) {
+            const points = [];
+            for (let i = 0; i <= segments; i++) {
+                const angle = (i / segments) * Math.PI * 2;
+                const x = Math.cos(angle) * radiusX;
+                const y = Math.sin(angle) * radiusY;
+                points.push(x, 0, y);
             }
 
-            const spaceshipGeometry = new THREE.BoxGeometry(spaceshipSize, spaceshipSize, spaceshipSize);
-            const spaceship = new THREE.Mesh(spaceshipGeometry, spaceshipMaterial);
+            const ellipticOrbitGeometry = new THREE.BufferGeometry();
+            ellipticOrbitGeometry.setAttribute('position', new THREE.Float32BufferAttribute(points, 3));
+            const ellipticOrbitMaterial = new THREE.LineBasicMaterial({ color: 0xffffff, opacity: 0.1, transparent: true });
+            const ellipticOrbitLine = new THREE.LineLoop(ellipticOrbitGeometry, ellipticOrbitMaterial);
+            scene.add(ellipticOrbitLine);
+            return ellipticOrbitLine;
+        }
 
-            spaceship.position.set(start.x, start.y, start.z);
-            scene.add(spaceship);
+        // Создаем орбиты для спутников
+        const firstOrbit = createOrbit(orbitRadius, orbitRadius, 128);
+        const secondOrbit = createOrbit(secondOrbitRadius, secondOrbitRadius, 128);
+        const thirdOrbit = createOrbit(thirdOrbitRadius, thirdOrbitRadius, 128);
+        const ellipticOrbit = createEllipticOrbit(ellipticOrbitRadiusX, ellipticOrbitRadiusY, 128);
 
-            // Массив для хранения точек шлейфа
-            const trailPoints = [];
-            const maxTrailLength = 50;
-            const trailGeometry = new THREE.BufferGeometry();
-            const trailMaterial = new THREE.LineBasicMaterial({ color: 0xfff600, transparent: true, opacity: 0.6 });
-            const trail = new THREE.Line(trailGeometry, trailMaterial);
-            scene.add(trail);
+        // Создаем новый спутник для эллиптической орбиты
+        const ellipticSmallSphere = new THREE.Mesh(smallSphereGeometry, materialWithTexture);
+        scene.add(ellipticSmallSphere);
 
-            // Анимация движения по дуге
-            let t = 0;
-            const speed = Math.random() * 0.0001 + 0.01;
+        // Функция орбитального движения
+        function orbitAround(time) {
+            smallSphere.position.x = Math.cos(time * orbitSpeed) * orbitRadius;
+            smallSphere.position.z = Math.sin(time * orbitSpeed) * orbitRadius;
 
-            const curve = new THREE.QuadraticBezierCurve3(
-                new THREE.Vector3(start.x, start.y, start.z),
-                new THREE.Vector3(
-                    (start.x + end.x) / 2 + (Math.random() - 0.5) * 5,
-                    (start.y + end.y) / 2 + (Math.random() - 0.5) * 5,
-                    (start.z + end.z) / 2 + (Math.random() - 0.5) * 5
-                ),
-                new THREE.Vector3(end.x, end.y, end.z)
-            );
+            secondSmallSphere.position.x = Math.cos(time * secondOrbitSpeed) * secondOrbitRadius;
+            secondSmallSphere.position.z = Math.sin(time * secondOrbitSpeed) * secondOrbitRadius;
 
-            function animateSpaceship() {
-                t += speed;
+            thirdSmallSphere.position.x = Math.cos(time * thirdOrbitSpeed) * thirdOrbitRadius;
+            thirdSmallSphere.position.z = Math.sin(time * thirdOrbitSpeed) * thirdOrbitRadius;
 
-                if (t > 1) {
-                    scene.remove(spaceship); // Удалить корабль после того как он пройдет путь
-                    fadeOutTrail(trail);
-                    return;
-                }
+            ellipticSmallSphere.position.x = Math.cos(time * ellipticOrbitSpeed) * ellipticOrbitRadiusX;
+            ellipticSmallSphere.position.z = Math.sin(time * ellipticOrbitSpeed) * ellipticOrbitRadiusY;
 
-                const position = curve.getPoint(t);
-                spaceship.position.set(position.x, position.y, position.z);
+            // Вращение большого шара
+            largeSphere.rotation.x += 0.005;
+            largeSphere.rotation.y += 0.005;
+        }
 
-                // Добавить текущую позицию в шлейф
-                trailPoints.push(new THREE.Vector3(position.x, position.y, position.z));
-                if (trailPoints.length > maxTrailLength) {
-                    trailPoints.shift(); // Удалить самую старую точку, если шлейф слишком длинный
-                }
+        // Пульсация свечения звезды
+        let pulsateIntensity = 1.5;
+        let pulsateSpeed = 0.003;
 
-                trailGeometry.setFromPoints(trailPoints);
-
-                requestAnimationFrame(animateSpaceship);
-            }
-
-            animateSpaceship();
-            spaceships.push(spaceship);
-            trails.push(trail);
-        };
-
-        const fadeOutTrail = (trail) => {
-            let opacity = 0.6;
-            const fadeOut = () => {
-                opacity -= 0.01;
-                if (opacity <= 0) {
-                    scene.remove(trail);
-                    return;
-                }
-                trail.material.opacity = opacity;
-                requestAnimationFrame(fadeOut);
-            };
-            fadeOut();
-        };
-
-        // Создание космического корабля каждую секунду
-        setInterval(createSpaceship, 3000);
+        let timeSpeed = 1; // Начальная скорость времени
 
         function animate() {
             requestAnimationFrame(animate);
 
-            if (galaxy) {
-                galaxy.rotation.y += galaxyParams.rotationSpeed;
-            }
+            // Пульсация свечения большого шара
+            pulsateIntensity = 1.5 + Math.sin(Date.now() * pulsateSpeed) * 0.5;
+            largeSphereMaterial.emissiveIntensity = pulsateIntensity;
 
-            controls.update();
+            // Вращение вокруг большой звезды
+            const time = Date.now() * 0.001 * timeSpeed;
+            orbitAround(time);
+
+            // Очень медленное вращение камеры
+            camera.position.x = 10 * Math.cos(Date.now() * 0.00005);
+            camera.position.z = 10 * Math.sin(Date.now() * 0.00005);
+            camera.lookAt(new THREE.Vector3(0, 0, 0));
+
+            // Рендеринг сцены
             renderer.render(scene, camera);
         }
 
         animate();
 
-        // Интерфейс управления
-        const gui = new dat.GUI();
-        gui.add(galaxyParams, 'count', 1000, 100000, 1000).name('Количество точек').onChange(generateGalaxy);
-        gui.add(galaxyParams, 'arms', 1, 10, 1).name('Количество рукавов').onChange(generateGalaxy);
-        gui.add(galaxyParams, 'radius', 5, 50, 1).name('Радиус галактики').onChange(generateGalaxy);
-        gui.add(galaxyParams, 'spread', 0.1, 5, 0.1).name('Разброс точек').onChange(generateGalaxy);
-        gui.add(galaxyParams, 'size', 0.001, 0.1, 0.001).name('Размер точек').onChange(generateGalaxy);
-        gui.add(galaxyParams, 'colorRandomness', 0, 1, 0.01).name('Случайность цвета').onChange(generateGalaxy);
-        gui.add(galaxyParams, 'rotationSpeed', 0.0001, 0.01, 0.0001).name('Скорость вращения').onChange(generateGalaxy);
-
-        // Кнопки для ссылок
-        const buttonContainer = document.createElement('div');
-        buttonContainer.className = 'button-container';
-        document.body.appendChild(buttonContainer);
-
-        const linkButton1 = document.createElement('button');
-        linkButton1.className = 'button';
-        linkButton1.textContent = 'STAR_SYSTEM';
-        linkButton1.onclick = () => window.open('https://gamzilaz.github.io/ ', '_blank');
-        buttonContainer.appendChild(linkButton1);
-
-        const linkButton2 = document.createElement('button');
-        linkButton2.className = 'button';
-        linkButton2.textContent = 'STARMAP';
-        linkButton2.onclick = () => window.open('https://starmap.vorpal.finance/', '_blank');
-        buttonContainer.appendChild(linkButton2);
-
+        // Обработчик изменения размера окна
         window.addEventListener('resize', () => {
             renderer.setSize(window.innerWidth, window.innerHeight);
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
         });
+
+        // Ползунок для изменения скорости времени
+        const timeSlider = document.createElement('input');
+        timeSlider.type = 'range';
+        timeSlider.min = '0';
+        timeSlider.max = '5';
+        timeSlider.value = '1';
+        timeSlider.step = '0.1';
+        timeSlider.classList.add('slider');
+        timeSlider.oninput = function() {
+            timeSpeed = parseFloat(timeSlider.value);
+        };
+
+        const uiPanel = document.createElement('div');
+        uiPanel.classList.add('ui-panel');
+        document.body.appendChild(uiPanel);
+
+        const sliderLabel = document.createElement('div');
+        sliderLabel.textContent = 'Ускорение времени';
+        uiPanel.appendChild(sliderLabel);
+        uiPanel.appendChild(timeSlider);
+
     </script>
 </body>
 </html>
